@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MROI Simulator</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0a0a0f; --surface: #12121a; --surface2: #1a1a26;
+      --border: #2a2a3d; --text: #e8e8f0; --muted: #6b6b8a;
+      --accent: #7c6ef5; --client: #7c6ef5; --worker: #00d4aa;
+    }
+    body { background: var(--bg); color: var(--text); font-family: 'Syne', sans-serif; }
+    .app { min-height: 100vh; padding: 32px 20px; max-width: 860px; margin: 0 auto; }
+    header { margin-bottom: 36px; }
+    .header-tag { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--accent); letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 8px; }
+    h1 { font-size: 28px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; color: var(--text); }
+    h1 span { color: var(--accent); }
+    .subtitle { margin-top: 8px; font-size: 13px; color: var(--muted); font-family: 'DM Mono', monospace; }
+    .results-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 28px; }
+    .result-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; position: relative; overflow: hidden; }
+    .result-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; }
+    .result-card.client::before { background: var(--client); }
+    .result-card.worker::before { background: var(--worker); }
+    .result-card-title { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 16px; }
+    .result-card.client .result-card-title { color: var(--client); }
+    .result-card.worker .result-card-title { color: var(--worker); }
+    .mroi-badge { display: flex; align-items: baseline; gap: 8px; border: 1px solid; border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; }
+    .mroi-value { font-size: 26px; font-weight: 700; font-family: 'DM Mono', monospace; line-height: 1; }
+    .mroi-label { font-size: 11px; font-family: 'DM Mono', monospace; opacity: 0.8; }
+    .metric-row { display: flex; justify-content: space-between; align-items: baseline; padding: 5px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
+    .metric-row:last-child { border-bottom: none; }
+    .metric-label { color: var(--muted); font-family: 'DM Mono', monospace; }
+    .metric-value { color: var(--text); font-family: 'DM Mono', monospace; font-weight: 500; text-align: right; }
+    .metric-sub { font-size: 10px; color: var(--muted); margin-left: 4px; }
+    .tabs { display: flex; gap: 4px; margin-bottom: 20px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 4px; }
+    .tab-btn { flex: 1; padding: 9px 16px; border: none; border-radius: 7px; font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 600; cursor: pointer; background: transparent; color: var(--muted); transition: all 0.15s; }
+    .tab-btn.active-client { background: var(--client); color: white; }
+    .tab-btn.active-worker { background: var(--worker); color: #0a0a0f; }
+    .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 24px; }
+    .panel-section { margin-bottom: 24px; }
+    .panel-section:last-child { margin-bottom: 0; }
+    .section-title { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin-bottom: 16px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+    .input-row { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+    .input-row:last-child { margin-bottom: 0; }
+    .input-label { display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 600; color: var(--text); }
+    .note { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted); font-weight: 400; }
+    .input-control { display: flex; align-items: center; gap: 12px; }
+    input[type="range"] { flex: 1; height: 3px; accent-color: var(--accent); cursor: pointer; }
+    .value-display { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--text); min-width: 110px; text-align: right; }
+    .formula-box { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); line-height: 1.8; margin-top: 16px; }
+    .formula-box span { color: var(--accent); }
+
+    /* Snapshot section */
+    .snapshot-section { margin-top: 28px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 24px; }
+    .snapshot-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .snapshot-title { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+    .snapshot-actions { display: flex; gap: 8px; align-items: center; }
+    .ym-input { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-family: 'DM Mono', monospace; font-size: 12px; padding: 6px 10px; width: 100px; outline: none; }
+    .ym-input:focus { border-color: var(--accent); }
+    .btn-copy { background: var(--accent); color: white; border: none; border-radius: 6px; font-family: 'Syne', sans-serif; font-size: 12px; font-weight: 700; padding: 7px 14px; cursor: pointer; transition: opacity 0.15s; white-space: nowrap; }
+    .btn-copy:hover { opacity: 0.85; }
+    .btn-copy.success { background: var(--worker); color: #0a0a0f; }
+    .snapshot-hint { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted); margin-bottom: 12px; }
+    .snapshot-preview { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 12px; overflow-x: auto; }
+    .snapshot-table { border-collapse: collapse; width: 100%; font-family: 'DM Mono', monospace; font-size: 11px; }
+    .snapshot-table th { color: var(--muted); text-align: left; padding: 4px 10px 4px 0; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    .snapshot-table td { color: var(--text); padding: 6px 10px 6px 0; white-space: nowrap; }
+
+    @media (max-width: 560px) { .results-row { grid-template-columns: 1fr; } h1 { font-size: 22px; } .snapshot-header { flex-direction: column; align-items: flex-start; gap: 10px; } }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useMemo } = React;
+
+    const now = new Date();
+    const defaultYM = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+    const defaultClient = {
+      avgOrderValue: 100000, ordersPerMonth: 2, takeRate: 20,
+      monthlyRetention: 85, newCustomersPerMonth: 100, marketingSpend: 10000000,
+    };
+    const defaultWorker = {
+      newWorkersPerMonth: 500, marketingSpend: 3000000,
+      currentMatchRate: 80, clientChurnIncrease: 5,
+    };
+
+    function SliderInput({ label, value, onChange, min, max, step = 1, unit = "", note, multiplier }) {
+      const displayValue = multiplier ? value * multiplier : value;
+      return (
+        <div className="input-row">
+          <div className="input-label">
+            <span>{label}</span>
+            {note && <span className="note">{note}</span>}
+          </div>
+          <div className="input-control">
+            <input type="range" min={min} max={max} step={step} value={value}
+              onChange={(e) => onChange(Number(e.target.value))} />
+            <span className="value-display">
+              {unit === "¥" ? `¥${displayValue.toLocaleString()}` : `${displayValue.toLocaleString()}${unit}`}
+            </span>
+          </div>
+        </div>
+      );
+    }
+
+    function calcClientLTV(c) {
+      const monthlyRevenue = c.avgOrderValue * c.ordersPerMonth * (c.takeRate / 100);
+      const retention = c.monthlyRetention / 100;
+      let s = 0;
+      for (let i = 0; i < 24; i++) s += Math.pow(retention, i);
+      return monthlyRevenue * s;
+    }
+
+    function calcClientMROI(c) {
+      const ltv = calcClientLTV(c);
+      const totalRevenue = ltv * c.newCustomersPerMonth;
+      const mroi = ((totalRevenue - c.marketingSpend) / c.marketingSpend) * 100;
+      return { ltv, totalRevenue, mroi };
+    }
+
+    function calcWorkerMROI(w, c) {
+      const clientLTV = calcClientLTV(c);
+      const degradedRetention = (c.monthlyRetention - w.clientChurnIncrease) / 100;
+      let s = 0;
+      for (let i = 0; i < 24; i++) s += Math.pow(Math.max(degradedRetention, 0), i);
+      const monthlyRevenue = c.avgOrderValue * c.ordersPerMonth * (c.takeRate / 100);
+      const degradedLTV = monthlyRevenue * s;
+      const ltvProtectedPerClient = clientLTV - degradedLTV;
+      const effectiveClientsProtected = c.newCustomersPerMonth * (w.currentMatchRate / 100);
+      const totalProtectedRevenue = ltvProtectedPerClient * effectiveClientsProtected;
+      const mroi = ((totalProtectedRevenue - w.marketingSpend) / w.marketingSpend) * 100;
+      return { ltvProtectedPerClient, totalProtectedRevenue, mroi };
+    }
+
+    function MROIBadge({ value }) {
+      const color = value >= 200 ? "#00ff9d" : value >= 100 ? "#7ddfff" : value >= 0 ? "#ffd166" : "#ff6b6b";
+      const label = value >= 200 ? "優秀" : value >= 100 ? "良好" : value >= 0 ? "要改善" : "赤字";
+      return (
+        <div className="mroi-badge" style={{ borderColor: color, color }}>
+          <span className="mroi-value">{value >= 0 ? "+" : ""}{value.toFixed(1)}%</span>
+          <span className="mroi-label">{label}</span>
+        </div>
+      );
+    }
+
+    function MetricRow({ label, value, sub }) {
+      return (
+        <div className="metric-row">
+          <span className="metric-label">{label}</span>
+          <span className="metric-value">{value}{sub && <span className="metric-sub">{sub}</span>}</span>
+        </div>
+      );
+    }
+
+    function SnapshotSection({ client, worker, clientResult, workerResult }) {
+      const [ym, setYm] = useState(defaultYM);
+      const [copied, setCopied] = useState(false);
+
+      const fmt = (n) => Math.round(n);
+      const pct = (n) => `${n >= 0 ? "+" : ""}${n.toFixed(1)}%`;
+
+      const headers = [
+        "年月",
+        "Client_MROI", "Client_LTV", "Client月次総収益", "Client_CAC",
+        "Client平均発注単価", "Client月平均発注件数", "テイクレート%", "月次継続率%",
+        "Client新規獲得数", "Clientマーケ費用",
+        "Worker_MROI", "LTV保全額/Client", "総LTV保全額",
+        "Worker新規獲得数", "Workerマーケ費用", "マッチング成立率%", "Client離脱率増分%"
+      ];
+
+      const values = [
+        ym,
+        pct(clientResult.mroi),
+        fmt(clientResult.ltv),
+        fmt(clientResult.totalRevenue),
+        fmt(client.marketingSpend / client.newCustomersPerMonth),
+        client.avgOrderValue,
+        client.ordersPerMonth,
+        client.takeRate,
+        client.monthlyRetention,
+        client.newCustomersPerMonth,
+        client.marketingSpend,
+        pct(workerResult.mroi),
+        fmt(workerResult.ltvProtectedPerClient),
+        fmt(workerResult.totalProtectedRevenue),
+        worker.newWorkersPerMonth,
+        worker.marketingSpend,
+        worker.currentMatchRate,
+        worker.clientChurnIncrease,
+      ];
+
+      const tsvHeader = headers.join("\t");
+      const tsvRow = values.join("\t");
+
+      const handleCopy = () => {
+        const tsv = `${tsvHeader}\n${tsvRow}`;
+        navigator.clipboard.writeText(tsv).then(() => {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 2000);
+        });
+      };
+
+      return (
+        <div className="snapshot-section">
+          <div className="snapshot-header">
+            <div className="snapshot-title">📋 スナップショット → スプレッドシート</div>
+            <div className="snapshot-actions">
+              <input
+                className="ym-input"
+                type="month"
+                value={ym}
+                onChange={(e) => setYm(e.target.value)}
+              />
+              <button className={`btn-copy ${copied ? "success" : ""}`} onClick={handleCopy}>
+                {copied ? "✓ コピー済み" : "TSVコピー"}
+              </button>
+            </div>
+          </div>
+          <div className="snapshot-hint">
+            ① 年月を確認 → ② 「TSVコピー」 → ③ スプシの次の行にペースト（Ctrl+V / ⌘V）
+          </div>
+          <div className="snapshot-preview">
+            <table className="snapshot-table">
+              <thead>
+                <tr>{headers.map((h, i) => <th key={i}>{h}</th>)}</tr>
+              </thead>
+              <tbody>
+                <tr>{values.map((v, i) => <td key={i}>{v}</td>)}</tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      );
+    }
+
+    function App() {
+      const [client, setClient] = useState(defaultClient);
+      const [worker, setWorker] = useState(defaultWorker);
+      const [tab, setTab] = useState("client");
+      const clientResult = useMemo(() => calcClientMROI(client), [client]);
+      const workerResult = useMemo(() => calcWorkerMROI(worker, client), [worker, client]);
+      const setC = (key) => (val) => setClient((p) => ({ ...p, [key]: val }));
+      const setW = (key) => (val) => setWorker((p) => ({ ...p, [key]: val }));
+      const fmt = (n) => `¥${Math.round(n).toLocaleString()}`;
+
+      return (
+        <div className="app">
+          <header>
+            <div className="header-tag">Matching Platform</div>
+            <h1>MROI <span>Simulator</span></h1>
+            <div className="subtitle">Client LTV 24M · Worker Supply Impact Model</div>
+          </header>
+
+          <div className="results-row">
+            <div className="result-card client">
+              <div className="result-card-title">▸ Client MROI</div>
+              <MROIBadge value={clientResult.mroi} />
+              <MetricRow label="LTV/人" value={fmt(clientResult.ltv)} />
+              <MetricRow label="月次総収益" value={fmt(clientResult.totalRevenue)} />
+              <MetricRow label="マーケ費用" value={fmt(client.marketingSpend)} />
+              <MetricRow label="CAC" value={fmt(client.marketingSpend / client.newCustomersPerMonth)} sub="/人" />
+            </div>
+            <div className="result-card worker">
+              <div className="result-card-title">▸ Worker MROI</div>
+              <MROIBadge value={workerResult.mroi} />
+              <MetricRow label="LTV保全額/Client" value={fmt(workerResult.ltvProtectedPerClient)} />
+              <MetricRow label="総LTV保全額" value={fmt(workerResult.totalProtectedRevenue)} />
+              <MetricRow label="マーケ費用" value={fmt(worker.marketingSpend)} />
+              <MetricRow label="Worker CAC" value={fmt(worker.marketingSpend / worker.newWorkersPerMonth)} sub="/人" />
+            </div>
+          </div>
+
+          <div className="tabs">
+            <button className={`tab-btn ${tab === "client" ? "active-client" : ""}`} onClick={() => setTab("client")}>クライアント設定</button>
+            <button className={`tab-btn ${tab === "worker" ? "active-worker" : ""}`} onClick={() => setTab("worker")}>ワーカー設定</button>
+          </div>
+
+          <div className="panel">
+            {tab === "client" && (
+              <div>
+                <div className="panel-section">
+                  <div className="section-title">収益パラメータ</div>
+                  <SliderInput label="契約1件あたり平均単価" value={client.avgOrderValue / 1000} onChange={(v) => setC("avgOrderValue")(v * 1000)} min={1} max={500} step={1} unit="¥" multiplier={1000} />
+                  <SliderInput label="発注者1人あたり月間契約件数" value={client.ordersPerMonth} onChange={setC("ordersPerMonth")} min={1} max={20} step={0.01} unit="件" />
+                  <SliderInput label="契約単価に対する手数料率" value={client.takeRate} onChange={setC("takeRate")} min={1} max={30} unit="%" />
+                  <SliderInput label="発注者の月次残存率" value={client.monthlyRetention} onChange={setC("monthlyRetention")} min={30} max={99} unit="%" note="MoM Retention" />
+                </div>
+                <div className="panel-section">
+                  <div className="section-title">マーケティングパラメータ</div>
+                  <SliderInput label="月間新規アクティブ発注者数" value={client.newCustomersPerMonth} onChange={setC("newCustomersPerMonth")} min={100} max={10000} step={100} unit="人" />
+                  <SliderInput label="月間クライアント向けマーケ費用" value={client.marketingSpend} onChange={setC("marketingSpend")} min={1000000} max={50000000} step={500000} unit="¥" />
+                </div>
+                <div className="formula-box">
+                  月次収益 = 単価 × 件数 × テイクレート<br />
+                  LTV = 月次収益 × <span>Σ(継続率^n)</span>　n=0..23<br />
+                  MROI = (LTV × 獲得数 − 費用) / 費用 × 100
+                </div>
+              </div>
+            )}
+            {tab === "worker" && (
+              <div>
+                <div className="panel-section">
+                  <div className="section-title">ワーカー獲得</div>
+                  <SliderInput label="月間新規アクティブワーカー数" value={worker.newWorkersPerMonth} onChange={setW("newWorkersPerMonth")} min={50} max={5000} step={50} unit="人" />
+                  <SliderInput label="月間ワーカー向けマーケ費用" value={worker.marketingSpend} onChange={setW("marketingSpend")} min={500000} max={30000000} step={500000} unit="¥" />
+                </div>
+                <div className="panel-section">
+                  <div className="section-title">供給インパクト</div>
+                  <SliderInput label="発注に対する契約成立率" value={worker.currentMatchRate} onChange={setW("currentMatchRate")} min={40} max={99} unit="%" />
+                  <SliderInput label="ワーカー不足時の発注者月次離脱率増分" value={worker.clientChurnIncrease} onChange={setW("clientChurnIncrease")} min={1} max={20} unit="%" note="ワーカー施策なし仮定" />
+                </div>
+                <div className="formula-box">
+                  保全LTV/Client = 通常LTV − <span>供給不足時LTV</span><br />
+                  供給不足時LTV：継続率を {worker.clientChurnIncrease}% 低下させて再計算<br />
+                  MROI = (保全LTV × 有効Client数 − 費用) / 費用 × 100
+                </div>
+              </div>
+            )}
+          </div>
+
+          <SnapshotSection
+            client={client} worker={worker}
+            clientResult={clientResult} workerResult={workerResult}
+          />
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
